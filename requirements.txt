@@ -1,0 +1,10 @@
+gradio
+torch
+transformers
+opencv-python-headless
+openai
+lancedb
+pyarrow
+pandas
+numpy
+ffmpeg-python

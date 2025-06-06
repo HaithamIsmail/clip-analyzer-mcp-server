@@ -16,18 +16,18 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_compl
 import time
 
 import torch
-from torch.utils.data import DataLoader, Dataset
 from transformers import CLIPProcessor, CLIPModel
 from openai import OpenAI
 
 # LanceDB integration
-# You will need to install lancedb: pip install lancedb pyarrow
 import lancedb
 import pyarrow as pa
 
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(), override=True)
+
 
 # --- Configuration ---
-# ## OPTIMIZATION: Centralized configuration. These could be loaded from a file or env variables.
 class Config:
     IMAGE_SIZE = (384, 384)
     SIMILARITY_THRESHOLD = 0.8
@@ -45,7 +45,7 @@ class Config:
     LANCEDB_URI = os.path.join(OUTPUT_DIR, "lancedb") # LanceDB database location
     
     # Set up OpenAI client from environment variable for better security.
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your_default_sk_key_here")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "default_key")
     
     # ## OPTIMIZATION: Use ProcessPoolExecutor for CPU-bound tasks, but be mindful of worker count.
     MAX_WORKERS_PROCESSES = os.cpu_count() or 1 # Default to 1 if cpu_count is not available
@@ -61,11 +61,10 @@ def get_clip_model_and_processor():
     logging.info(f"Using device: {device}")
     model = CLIPModel.from_pretrained(config.CLIP_MODEL_NAME).to(device)
     processor = CLIPProcessor.from_pretrained(config.CLIP_MODEL_NAME)
-    model.eval()
     return model, processor, device
 
 def get_openai_client():
-    if not config.OPENAI_API_KEY or "your_default_sk_key_here" in config.OPENAI_API_KEY:
+    if not config.OPENAI_API_KEY or "default_key" in config.OPENAI_API_KEY:
         raise ValueError("OPENAI_API_KEY environment variable not set or is a placeholder.")
     return OpenAI(api_key=config.OPENAI_API_KEY)
 
@@ -93,7 +92,7 @@ def get_lancedb_table(table_name="video_clips"):
     try:
         tbl = db.open_table(table_name)
         logging.info(f"Opened existing LanceDB table '{table_name}'.")
-    except FileNotFoundError:
+    except:
         tbl = db.create_table(table_name, schema=schema)
         logging.info(f"Created new LanceDB table '{table_name}'.")
         

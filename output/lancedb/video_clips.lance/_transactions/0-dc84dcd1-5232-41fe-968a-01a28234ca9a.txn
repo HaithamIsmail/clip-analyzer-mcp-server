@@ -1,0 +1,5 @@
+$dc84dcd1-5232-41fe-968a-01a28234ca9a²û(clip_id ÿÿÿÿÿÿÿÿÿ*int3208Zdefault.
+video_name ÿÿÿÿÿÿÿÿÿ*string08Zdefault-	video_uri ÿÿÿÿÿÿÿÿÿ*string08Zdefault-	clip_path ÿÿÿÿÿÿÿÿÿ*string08Zdefault-
+start_time ÿÿÿÿÿÿÿÿÿ*int3208Zdefault+end_time ÿÿÿÿÿÿÿÿÿ*int3208Zdefault+summary ÿÿÿÿÿÿÿÿÿ*string08Zdefault-	thumbnail ÿÿÿÿÿÿÿÿÿ*string08Zdefault=vector ÿÿÿÿÿÿÿÿÿ*fixed_size_list:float:51208Zdefault"'
+lance.auto_cleanup.older_than14days"!
+lance.auto_cleanup.interval20
