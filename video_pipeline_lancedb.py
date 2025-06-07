@@ -19,7 +19,6 @@ import torch
 from transformers import CLIPProcessor, CLIPModel
 from openai import OpenAI
 
-# LanceDB integration
 import lancedb
 import pyarrow as pa
 
@@ -30,9 +29,10 @@ load_dotenv(find_dotenv(), override=True)
 # --- Configuration ---
 class Config:
     IMAGE_SIZE = (384, 384)
-    SIMILARITY_THRESHOLD = 0.8
-    OPENAI_MODEL = "gpt-4o"
+    SIMILARITY_THRESHOLD = 0.85
+    OPENAI_MODEL = "gpt-4.1"
     CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
+    TEXT_EMBEDDING_MODEL_NAME = "thenlper/gte-large"
     CLIP_EMBEDDING_DIM = 512 # Based on clip-vit-base-patch32
     WHISPER_MODEL_NAME = "whisper-1"
     
@@ -80,7 +80,6 @@ def get_lancedb_table(table_name="video_clips"):
     schema = pa.schema([
         pa.field("clip_id", pa.int32()),
         pa.field("video_name", pa.string()),
-        pa.field("video_uri", pa.string()),
         pa.field("clip_path", pa.string()), # Path to the saved .mp4 clip file
         pa.field("start_time", pa.int32()),
         pa.field("end_time", pa.int32()),
@@ -322,7 +321,12 @@ def summarize_clip(clip_data):
         
         # Generate summary
         prompt = [
-            {"role": "system", "content": "You are a video summarization assistant. Create a concise, single-paragraph summary of the provided video clip, integrating visual actions and background elements with the spoken content."},
+            {"role": "system", "content": \
+             """You are a video summarization assistant. Your job is to create a consice, short summary of what happens in the video, integrating visual actions and background elements with the spoken content.
+             You should mention any relevant details that appear int the frames are not mentioned in the transcription.
+             If the transcription is not provide just explain what you see in the frames.
+             Never mention that "I'm unable to provide a summary without the audio transcription". Just give me a summary of what is happening.
+             """},
             {"role": "user", "content": [
                 "These are frames from the video clip.",
                 *map(lambda x: {"type": "image_url", "image_url": {"url": f'data:image/jpeg;base64,{x}'}}, clip_data["base64_frames"]),
@@ -361,7 +365,7 @@ def embed_text_with_clip(texts):
     return embeddings
 
 
-def run_pipeline(video_path, video_uri):
+def run_pipeline(video_path):
     """Main pipeline execution logic."""
     video_name = os.path.basename(video_path).split(".")[0]
     create_directory(config.OUTPUT_DIR)
@@ -409,7 +413,6 @@ def run_pipeline(video_path, video_uri):
         lancedb_data.append({
             'clip_id': clip_idx,
             'video_name': video_name,
-            'video_uri': video_uri,
             'clip_path': result['clip_path'],
             'start_time': start_times[clip_idx],
             'end_time': end_times[clip_idx],
@@ -440,10 +443,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Optimized Video Processing Pipeline with LanceDB.")
     parser.add_argument("--video_path", type=str, required=True, help="Path to the video file")
-    parser.add_argument("--video_uri", type=str, required=True, help="URI of the video")
     
     args = parser.parse_args()
     
     total_start_time = time.time()
-    run_pipeline(args.video_path, args.video_uri)
+    run_pipeline(args.video_path)
     logging.info(f"Total pipeline execution time: {time.time() - total_start_time:.2f} seconds.")

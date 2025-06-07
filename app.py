@@ -2,10 +2,8 @@ import gradio as gr
 import lancedb
 import os
 from dotenv import load_dotenv
-import pandas as pd
-import torch
-from transformers import CLIPTokenizer, CLIPTextModel
-import numpy as np
+import requests
+from huggingface_hub import InferenceClient
 
 # Load environment variables
 load_dotenv()
@@ -13,49 +11,24 @@ load_dotenv()
 # --- Configuration ---
 LANCEDB_URI = "output/lancedb" 
 CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
+CLIP_EMBEDDING_DIM = 512
+HF_API_KEY = os.getenv("HF_API_KEY", "default_key")
 
-# Initialize CLIP model
-print("🔄 Loading CLIP model...")
-try:
-    tokenizer = CLIPTokenizer.from_pretrained(CLIP_MODEL_NAME)
-    text_model = CLIPTextModel.from_pretrained(CLIP_MODEL_NAME)
-    
-    # Move to GPU if available
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    text_model = text_model.to(device)
-    
-    print(f"✅ CLIP model loaded successfully on {device}")
-    clip_model_loaded = True
-except Exception as e:
-    print(f"❌ Failed to load CLIP model: {e}")
-    tokenizer = None
-    text_model = None
-    clip_model_loaded = False
+def get_hf_headers():
+    """Get headers for Hugging Face API requests."""
+    if not HF_API_KEY or "default_key" in HF_API_KEY:
+        raise ValueError("HF_API_KEY environment variable not set or is a placeholder.")
+    return HF_API_KEY
 
 def get_text_embedding(text):
-    """Generate text embedding using CLIP model."""
-    if not clip_model_loaded:
-        raise Exception("CLIP model not loaded")
-    
-    # Tokenize and encode text
-    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True, max_length=77)
-    inputs = {k: v.to(device) for k, v in inputs.items()}
-    
-    # Generate embeddings
-    with torch.no_grad():
-        text_features = text_model(**inputs).last_hidden_state
-        # Use the CLS token (first token) as the text representation
-        text_embedding = text_features[:, 0, :].cpu().numpy()
-    
-    return text_embedding[0]  # Return single embedding vector
+    """Generate text embedding using Hugging Face API."""
+    client = InferenceClient(model=CLIP_MODEL_NAME, api_key=HF_API_KEY)
+    return client.feature_extraction(text)
 
 def search_clips(query_text):
     """Searches the LanceDB database for clips matching the query."""
-    if not clip_model_loaded:
-        return "Error: CLIP model not loaded properly"
-    
     try:
-        # Create embedding for the query using CLIP
+        # Create embedding for the query using Hugging Face API
         query_vector = get_text_embedding(query_text)
         
         # Connect to LanceDB
@@ -249,7 +222,7 @@ if __name__ == "__main__":
     print("📍 Using CLIP model for embeddings:", CLIP_MODEL_NAME)
     print("📍 Ensure the Video Analysis MCP Server is running on port 7860")
     print("📍 Database path should be: output/lancedb")
-    print(f"📍 CLIP model loaded: {'✅' if clip_model_loaded else '❌'}")
+    # print(f"📍 CLIP model loaded: {'✅' if clip_model_loaded else '❌'}")
     
     demo.launch(
         server_name="0.0.0.0",  # Allow external access
