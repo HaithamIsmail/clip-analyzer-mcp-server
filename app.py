@@ -1,18 +1,19 @@
 import gradio as gr
 import lancedb
 import os
-from dotenv import load_dotenv
-import requests
-from huggingface_hub import InferenceClient
+from dotenv import load_dotenv, find_dotenv
+from utils import get_image_embedding, get_text_embedding
 
 # Load environment variables
-load_dotenv()
+load_dotenv(find_dotenv(), override=True)
 
 # --- Configuration ---
 LANCEDB_URI = "output/lancedb" 
 CLIP_MODEL_NAME = "openai/clip-vit-base-patch32"
+TEXT_EMBEDDING_MODEL_NAME = "thenlper/gte-large"
 CLIP_EMBEDDING_DIM = 512
 HF_API_KEY = os.getenv("HF_API_KEY", "default_key")
+CLIP_EMBEDDING_URL = os.getenv("MODAL_EMBEDDING_SERVER")
 
 def get_hf_headers():
     """Get headers for Hugging Face API requests."""
@@ -20,23 +21,18 @@ def get_hf_headers():
         raise ValueError("HF_API_KEY environment variable not set or is a placeholder.")
     return HF_API_KEY
 
-def get_text_embedding(text):
-    """Generate text embedding using Hugging Face API."""
-    client = InferenceClient(model=CLIP_MODEL_NAME, api_key=HF_API_KEY)
-    return client.feature_extraction(text)
-
 def search_clips(query_text):
     """Searches the LanceDB database for clips matching the query."""
     try:
         # Create embedding for the query using Hugging Face API
-        query_vector = get_text_embedding(query_text)
+        query_vector = get_text_embedding(query_text, CLIP_EMBEDDING_URL)[0]
         
         # Connect to LanceDB
         db = lancedb.connect(LANCEDB_URI)
         table = db.open_table("video_clips")
         
         # Search for similar clips
-        results = table.search(query_vector).limit(3).to_df()
+        results = table.search(query_vector).limit(3).to_pandas()
         return results
         
     except FileNotFoundError:
@@ -225,8 +221,8 @@ if __name__ == "__main__":
     # print(f"📍 CLIP model loaded: {'✅' if clip_model_loaded else '❌'}")
     
     demo.launch(
-        server_name="0.0.0.0",  # Allow external access
-        server_port=7861,       # Different port than the MCP server
-        share=False,            # Set to True if you want a public link
-        debug=True              # Enable debug mode
+        server_name="localhost",
+        server_port=7861,
+        share=False,
+        debug=True
     )

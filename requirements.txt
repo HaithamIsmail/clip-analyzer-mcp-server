@@ -1,7 +1,5 @@
 gradio
-torch
-transformers
-opencv-python-headless
+opencv-python
 openai
 lancedb
 pyarrow

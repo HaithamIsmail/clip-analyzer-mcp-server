@@ -1,4 +1,4 @@
-$2804a509-df18-4717-891c-4441f7de47f3²Ì(clip_id ÿÿÿÿÿÿÿÿÿ*int3208Zdefault.
+$1dd85b85-9a9c-4058-9718-f220b80ea8cb²Ì(clip_id ÿÿÿÿÿÿÿÿÿ*int3208Zdefault.
 video_name ÿÿÿÿÿÿÿÿÿ*string08Zdefault-	clip_path ÿÿÿÿÿÿÿÿÿ*string08Zdefault-
 start_time ÿÿÿÿÿÿÿÿÿ*int3208Zdefault+end_time ÿÿÿÿÿÿÿÿÿ*int3208Zdefault+summary ÿÿÿÿÿÿÿÿÿ*string08Zdefault-	thumbnail ÿÿÿÿÿÿÿÿÿ*string08Zdefault=vector ÿÿÿÿÿÿÿÿÿ*fixed_size_list:float:51208Zdefault"!
 lance.auto_cleanup.interval20"'
