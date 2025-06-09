@@ -3,6 +3,9 @@ import lancedb
 import os
 from dotenv import load_dotenv, find_dotenv
 from utils import get_image_embedding, get_text_embedding
+from video_pipeline import run_pipeline
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
 
 # Load environment variables
 load_dotenv(find_dotenv(), override=True)
@@ -14,6 +17,13 @@ TEXT_EMBEDDING_MODEL_NAME = "thenlper/gte-large"
 CLIP_EMBEDDING_DIM = 512
 HF_API_KEY = os.getenv("HF_API_KEY", "default_key")
 CLIP_EMBEDDING_URL = os.getenv("MODAL_EMBEDDING_SERVER")
+
+chat_model = ChatOpenAI(
+    # model="Qwen/Qwen3-30B-A3B",
+    model="Qwen/Qwen3-32B",
+    base_url="https://api.studio.nebius.com/v1/",
+    api_key=os.getenv("NEBIUS_API_KEY")
+)
 
 def get_hf_headers():
     """Get headers for Hugging Face API requests."""
@@ -69,46 +79,51 @@ def format_search_results(results_df):
     
     return response
 
+@tool
+def get_relevant_clips(query):
+    """Retreive relevant clips from vector database
+
+    Args:
+        query: Text to use in vector search
+
+    Returns :
+        str: the search results formatted in a string
+    """
+    search_result = search_clips(query)
+    formatted_search_result = format_search_results(search_result)
+
+    return formatted_search_result
+
 def chat_agent(message, history):
-    """Main chat agent function."""
-    if not message.strip():
-        return "Please enter a message."
-    
-    message_lower = message.lower().strip()
-    
-    # Handle video analysis request
-    if any(phrase in message_lower for phrase in ["analyze video", "process video", "upload video"]):
-        return "To analyze a new video, please use the 'Video Analyzer Tool' section below. Make sure the Video Analysis MCP Server is running on port 7860."
-    
-    # Handle clip search request
-    elif any(phrase in message_lower for phrase in ["find clips", "search clips", "clips about"]):
-        # Extract query from various formats
-        query = message_lower
-        for phrase in ["find clips about", "search clips about", "clips about", "find clips", "search clips"]:
-            if phrase in query:
-                query = query.replace(phrase, "").strip()
-                break
-        
-        if not query:
-            return "Please specify what you'd like to search for. Example: 'find clips about sports'"
-        
-        # Perform search
-        results_df = search_clips(query)
-        return format_search_results(results_df)
-    
-    # Handle general questions
-    else:
-        return """I'm a video search agent! Here's what I can help you with:
+    messages = history or []
+    messages.append({"role": "user", "content": message})
 
-🔍 **Search existing clips**: Say "find clips about [topic]" to search through processed videos
-📹 **Analyze new videos**: Use the Video Analyzer Tool below to process new videos
-        
-**Examples:**
-- "find clips about cooking"
-- "search clips about sports highlights"
-- "clips about meeting discussions"
+    llm_with_tool = chat_model.bind_tools(tools=[get_relevant_clips])
+    tools = {"get_relevant_clips": get_relevant_clips}
 
-What would you like to do?"""
+    # The agent loop
+    while True:
+        # Pass the entire message history to the model
+        ai_response = llm_with_tool.invoke(messages)
+        
+        # Append the assistant's response to the history
+        messages.append(ai_response) # LangChain AIMessage objects work directly here
+
+        # If there are no tool calls, the agent is done
+        if not ai_response.tool_calls:
+            break
+
+        # If there are tool calls, process them
+        for tool_call in ai_response.tool_calls:
+            tool_output = tools[tool_call["name"]].invoke(tool_call)
+            messages.append(tool_output)
+    
+    print(ai_response)
+    # Extract content after </think> if it exists, otherwise use the content as is
+    content = ai_response.content
+    if "</think>" in content:
+        content = content.split("</think>")[-1].strip()
+    return content
 
 def check_database_status():
     """Check if the database exists and has data."""
@@ -148,7 +163,7 @@ with gr.Blocks(title="Video Search Agent", theme=gr.themes.Soft()) as demo:
             fn=lambda: f"{check_database_status()}\n{check_server_status()}",
             outputs=status_text
         )
-    
+
     # Main chat interface
     gr.ChatInterface(
         fn=chat_agent,
@@ -183,8 +198,8 @@ with gr.Blocks(title="Video Search Agent", theme=gr.themes.Soft()) as demo:
             with gr.Row():
                 video_file = gr.File(
                     label="Upload Video",
-                    file_types=["video"],
-                    type="filepath"
+                    file_types=[".mp4"],
+                    type="binary"
                 )
                 analyze_btn = gr.Button("Analyze Video", variant="primary")
             
@@ -194,13 +209,30 @@ with gr.Blocks(title="Video Search Agent", theme=gr.themes.Soft()) as demo:
                 interactive=False
             )
             
-            def analyze_video_local(video_path):
-                if not video_path:
+            def analyze_video_local(file_obj):
+                import tempfile, shutil
+                if not file_obj:
                     return "Please select a video file first."
-                
-                # Here you would call your video analysis server
-                # For now, just return a placeholder message
-                return f"Video analysis would be triggered for: {video_path}\n\nNote: This requires the MCP server to be running on port 7860."
+                try:
+                    # Save uploaded file to a temp file with the same name as the uploaded file
+                    if hasattr(file_obj, 'name'):
+                        original_filename = os.path.basename(file_obj.name)
+                    else:
+                        original_filename = "uploaded_video.mp4"
+                    temp_dir = tempfile.mkdtemp()
+                    tmp_path = os.path.join(temp_dir, original_filename)
+                    with open(tmp_path, "wb") as f:
+                        f.write(file_obj)
+                    run_pipeline(tmp_path)
+                    # Optionally, clean up temp file after processing
+                    try:
+                        os.remove(tmp_path)
+                        shutil.rmtree(temp_dir)
+                    except Exception:
+                        pass
+                    return f"✅ Video analysis complete for uploaded file."
+                except Exception as e:
+                    return f"❌ Error during video analysis: {str(e)}"
             
             analyze_btn.click(
                 fn=analyze_video_local,

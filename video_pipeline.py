@@ -13,6 +13,7 @@ from threading import Thread
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import time
 from utils import get_image_embedding, get_text_embedding
+from prompts import content_summary
 
 from openai import OpenAI
 from huggingface_hub import InferenceClient
@@ -336,12 +337,7 @@ def summarize_clip(clip_data):
         
         # Generate summary
         prompt = [
-            {"role": "system", "content": \
-             """You are a video summarization assistant. Your job is to create a consice, short summary of what happens in the video, integrating visual actions and background elements with the spoken content.
-             You should mention any relevant details that appear int the frames are not mentioned in the transcription.
-             If the transcription is not provide just explain what you see in the frames.
-             Never mention that "I'm unable to provide a summary without the audio transcription". Just give me a summary of what is happening.
-             """},
+            {"role": "system", "content": content_summary},
             {"role": "user", "content": [
                 {"type": "text", "text": f"These are frames from the video clip."},
                 *map(lambda x: {"type": "image_url", "image_url": {"url": f'data:image/jpeg;base64,{x}'}}, clip_data["base64_frames"]),
